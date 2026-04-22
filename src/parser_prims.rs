@@ -99,7 +99,7 @@ where
     }
 }
 
-impl<E> Parser<E, ()> for char
+impl<E, C> Parser<E, C> for char
 where
     E: From<ParseError>,
 {
@@ -110,7 +110,7 @@ where
         &mut self,
         input: Input<'a>,
         errs: impl ErrorHandler<E>,
-        _ctx: Context<()>,
+        _ctx: Context<C>,
     ) -> ParserResult<Self::Output<'a>> {
         if input.slice().starts_with(*self) {
             Some((self.len_utf8(), ()))
@@ -118,6 +118,15 @@ where
             errs.error(ParseError::ExpectedChar(*self), input.cur..input.cur);
             None
         }
+    }
+}
+
+impl<E, C> FixedLengthParser<E, C> for char
+where
+    E: From<ParseError>,
+{
+    fn parsed_len(&self) -> usize {
+        self.len_utf8()
     }
 }
 
