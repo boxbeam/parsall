@@ -1,0 +1,104 @@
+use std::{
+    cell::UnsafeCell,
+    error::Error,
+    fmt::{Debug, Display},
+    ops::{Range, RangeInclusive},
+};
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum ParserError {
+    /// Thrown when a literal substring is expected.
+    ExpectedLiteral(&'static str, &'static str),
+    /// Thrown when a literal character is expected.
+    ExpectedChar(char),
+    /// Thrown when an unspecified parsing operation associated with a named parser fails.
+    ExpectedToken(&'static str),
+    /// Thrown when one of a set of symbols is expected
+    ExpectedSymbol(&'static [char]),
+    /// Thrown when one of a set of symbols is expected
+    ExpectedRange(RangeInclusive<char>),
+    /// Thrown when a parsing operation expected to not find a specific value
+    IllegalToken(&'static str),
+    /// Thrown when a delimiter, such as a paren, is opened but never closed
+    UnmatchedDelimiter(&'static str),
+    /// Thrown when parsing succeeds, but there are more tokens left in the input which were not consumed.
+    UnexpectedToken,
+}
+
+impl Error for ParserError {}
+
+impl Display for ParserError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ParserError::ExpectedLiteral(lit, parser_name) => write!(
+                f,
+                "Expected '{lit}' while parsing {parser_name}",
+                lit = lit.replace('\n', "<newline>").replace('\t', "<tab>"),
+                parser_name = parser_name.replace('_', " ")
+            ),
+            ParserError::ExpectedToken(token) => write!(f, "Expected {}", token.replace('_', " ")),
+            ParserError::UnexpectedToken => write!(f, "Unexpected token"),
+            ParserError::UnmatchedDelimiter(delim) => write!(f, "Unmatched delimiter '{delim}'"),
+            ParserError::IllegalToken(token) => write!(f, "Illegal token while parsing '{token}'"),
+            ParserError::ExpectedSymbol(items) => write!(f, "Expected one of {items:?}"),
+            ParserError::ExpectedChar(c) => write!(f, "Expected '{c}'"),
+            ParserError::ExpectedRange(range_inclusive) => {
+                write!(f, "Expected symbol in {range_inclusive:?}")
+            }
+        }
+    }
+}
+
+pub trait ErrorHandler<E>: Clone {
+    fn error(&self, err: impl Into<E>, loc: Range<usize>);
+}
+
+impl<F, E> ErrorHandler<E> for &F
+where
+    F: Fn(E, Range<usize>),
+{
+    fn error(&self, err: impl Into<E>, loc: Range<usize>) {
+        self(err.into(), loc)
+    }
+}
+
+#[derive(Clone)]
+pub struct DebugErrorHandler;
+
+impl<E> ErrorHandler<E> for DebugErrorHandler
+where
+    E: Debug,
+{
+    fn error(&self, err: impl Into<E>, loc: Range<usize>) {
+        let err = err.into();
+        eprintln!("Error at {loc:?}: {err:?}");
+    }
+}
+
+#[derive(Debug)]
+pub struct ErrorLocation<E>(pub E, pub Range<usize>);
+
+pub struct ErrorCell<E> {
+    inner: UnsafeCell<Option<ErrorLocation<E>>>,
+}
+
+impl<E> Default for ErrorCell<E> {
+    fn default() -> Self {
+        Self { inner: None.into() }
+    }
+}
+
+impl<E> ErrorHandler<E> for &ErrorCell<E> {
+    fn error(&self, err: impl Into<E>, loc: Range<usize>) {
+        unsafe {
+            let inner = self.inner.get();
+            (*inner).replace(ErrorLocation(err.into(), loc));
+        }
+    }
+}
+
+impl<E> ErrorCell<E> {
+    pub fn into_inner(self) -> Option<ErrorLocation<E>> {
+        self.inner.into_inner()
+    }
+}
