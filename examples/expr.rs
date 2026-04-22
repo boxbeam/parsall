@@ -3,9 +3,9 @@ use parsall::prelude::*;
 fn operate(l: f64, o: Operation, r: f64) -> f64 {
     match o {
         Operation::Add => l + r,
-        Operation::Mul => l - r,
+        Operation::Mul => l * r,
         Operation::Div => l / r,
-        Operation::Sub => l * r,
+        Operation::Sub => l - r,
     }
 }
 
