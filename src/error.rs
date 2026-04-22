@@ -6,7 +6,7 @@ use std::{
 };
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum ParserError {
+pub enum ParseError {
     /// Thrown when a literal substring is expected.
     ExpectedLiteral(&'static str, &'static str),
     /// Thrown when a literal character is expected.
@@ -21,22 +21,22 @@ pub enum ParserError {
     UnexpectedToken,
 }
 
-impl Error for ParserError {}
+impl Error for ParseError {}
 
-impl Display for ParserError {
+impl Display for ParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ParserError::ExpectedLiteral(lit, parser_name) => write!(
+            ParseError::ExpectedLiteral(lit, parser_name) => write!(
                 f,
                 "Expected '{lit}' while parsing {parser_name}",
                 lit = lit.replace('\n', "<newline>").replace('\t', "<tab>"),
                 parser_name = parser_name.replace('_', " ")
             ),
-            ParserError::ExpectedToken(token) => write!(f, "Expected {}", token.replace('_', " ")),
-            ParserError::UnexpectedToken => write!(f, "Unexpected token"),
-            ParserError::ExpectedSymbol(items) => write!(f, "Expected one of {items:?}"),
-            ParserError::ExpectedChar(c) => write!(f, "Expected '{c}'"),
-            ParserError::ExpectedRange(range_inclusive) => {
+            ParseError::ExpectedToken(token) => write!(f, "Expected {}", token.replace('_', " ")),
+            ParseError::UnexpectedToken => write!(f, "Unexpected token"),
+            ParseError::ExpectedSymbol(items) => write!(f, "Expected one of {items:?}"),
+            ParseError::ExpectedChar(c) => write!(f, "Expected '{c}'"),
+            ParseError::ExpectedRange(range_inclusive) => {
                 write!(f, "Expected symbol in {range_inclusive:?}")
             }
         }

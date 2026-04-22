@@ -60,17 +60,17 @@ macro_rules! err_type {
         $ty
     };
     () => {
-        ParserError
+        $crate::error::ParseError
     };
 }
 
 #[macro_export]
 macro_rules! keep_type {
     ($ty:ty) => {
-        Keep
+        $crate::output::Keep
     };
     () => {
-        Ignore
+        $crate::output::Ignore
     };
 }
 

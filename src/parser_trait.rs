@@ -1,12 +1,12 @@
 use std::{io::Write, marker::PhantomData, ops::Range};
 
 use crate::{
-    Context, ErrorLocation, Input, ParserError, ParserResult,
+    Context, ErrorLocation, Input, ParseError, ParserResult,
     error::{ErrorCell, ErrorHandler},
     output::{Chain, ChainImpl, Collector, DelimitedCollector, Ignore, Keep, OptionalOutput},
 };
 
-pub trait Parser<Err = ParserError, Ctx = ()> {
+pub trait Parser<Err = ParseError, Ctx = ()> {
     type Output<'a>;
     type Kind;
 
@@ -552,7 +552,7 @@ pub trait Parser<Err = ParserError, Ctx = ()> {
     ) -> impl for<'a> Parser<Err, Ctx, Output<'a> = Self::Output<'a>, Kind = Self::Kind>
     where
         Self: Sized,
-        Err: From<ParserError>,
+        Err: From<ParseError>,
     {
         struct Wrapped<P> {
             p: P,
@@ -563,7 +563,7 @@ pub trait Parser<Err = ParserError, Ctx = ()> {
         impl<P, E, C> Parser<E, C> for Wrapped<P>
         where
             P: Parser<E, C>,
-            E: From<ParserError>,
+            E: From<ParseError>,
         {
             type Output<'a> = P::Output<'a>;
             type Kind = P::Kind;
@@ -575,7 +575,7 @@ pub trait Parser<Err = ParserError, Ctx = ()> {
                 ctx: Context<C>,
             ) -> ParserResult<Self::Output<'a>> {
                 let errs_clone = errs.clone();
-                let handler = |e: ParserError, loc| errs_clone.error(E::from(e), loc);
+                let handler = |e: ParseError, loc| errs_clone.error(E::from(e), loc);
                 Parser::parse(&mut self.before, input, &handler, &mut ())?;
                 let (len, val) = self.p.parse(input.skip(self.before.len()), errs, ctx)?;
                 Parser::parse(
@@ -625,7 +625,7 @@ pub trait Parser<Err = ParserError, Ctx = ()> {
     fn not(self) -> impl for<'a> Parser<Err, Ctx, Output<'a> = (), Kind = Ignore>
     where
         Self: Sized,
-        Err: From<ParserError>,
+        Err: From<ParseError>,
     {
         struct Not<P> {
             p: P,
@@ -633,7 +633,7 @@ pub trait Parser<Err = ParserError, Ctx = ()> {
         impl<P, E, C> Parser<E, C> for Not<P>
         where
             P: Parser<E, C>,
-            E: From<ParserError>,
+            E: From<ParseError>,
         {
             type Output<'a> = ();
             type Kind = Ignore;
@@ -646,7 +646,7 @@ pub trait Parser<Err = ParserError, Ctx = ()> {
             ) -> ParserResult<Self::Output<'a>> {
                 let result = self.p.parse(input, errs.clone(), ctx);
                 if result.is_some() {
-                    errs.error(ParserError::UnexpectedToken, input.cur..input.cur);
+                    errs.error(ParseError::UnexpectedToken, input.cur..input.cur);
                     None
                 } else {
                     Some((0, ()))
@@ -736,7 +736,7 @@ pub trait FixedLengthParser<E, C>: Parser<E, C> {
     fn negative_lookbehind(self) -> impl for<'a> Parser<E, C, Output<'a> = (), Kind = Ignore>
     where
         Self: Sized,
-        E: From<ParserError>,
+        E: From<ParseError>,
     {
         struct NegativeLookbehind<P> {
             p: P,
@@ -744,7 +744,7 @@ pub trait FixedLengthParser<E, C>: Parser<E, C> {
         impl<P, E, C> Parser<E, C> for NegativeLookbehind<P>
         where
             P: FixedLengthParser<E, C>,
-            E: From<ParserError>,
+            E: From<ParseError>,
         {
             type Output<'a> = ();
             type Kind = Ignore;
@@ -761,7 +761,7 @@ pub trait FixedLengthParser<E, C>: Parser<E, C> {
                 };
                 let result = self.p.parse(new_input, errs.clone(), ctx);
                 if result.is_some() {
-                    errs.error(ParserError::UnexpectedToken, input.cur..input.cur);
+                    errs.error(ParseError::UnexpectedToken, input.cur..input.cur);
                     None
                 } else {
                     Some((0, ()))

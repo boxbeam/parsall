@@ -48,7 +48,7 @@ parser_fns! {
 enum JSONError {
     Int(ParseIntError),
     Float(ParseFloatError),
-    Parse(ParserError),
+    Parse(ParseError),
 }
 
 impl From<ParseIntError> for JSONError {
@@ -63,8 +63,8 @@ impl From<ParseFloatError> for JSONError {
     }
 }
 
-impl From<ParserError> for JSONError {
-    fn from(value: ParserError) -> Self {
+impl From<ParseError> for JSONError {
+    fn from(value: ParseError) -> Self {
         JSONError::Parse(value)
     }
 }

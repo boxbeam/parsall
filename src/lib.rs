@@ -1,4 +1,4 @@
-use crate::error::{ErrorLocation, ParserError};
+use crate::error::{ErrorLocation, ParseError};
 
 pub mod error;
 pub mod macros;

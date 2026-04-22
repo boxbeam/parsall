@@ -17,7 +17,6 @@ enum Operation {
 }
 
 parser_fns! {
-    sep(char::is_whitespace.rep(Ignore).opt());
     digits(('0'..='9').rep(Ignore));
     float(digits.then('.'.then(digits).opt()).slice().map(|s| s.parse().unwrap())) -> f64;
 
@@ -37,5 +36,5 @@ parser_fns! {
 }
 
 fn main() {
-    Parser::<ParserError>::repl(add);
+    Parser::<ParseError>::repl(add);
 }

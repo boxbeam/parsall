@@ -1,7 +1,7 @@
 use std::ops::{RangeFull, RangeInclusive};
 
 use crate::{
-    Context, Input, ParserError, ParserResult,
+    Context, Input, ParseError, ParserResult,
     error::ErrorHandler,
     output::{Ignore, Keep},
     parser_fn,
@@ -10,7 +10,7 @@ use crate::{
 
 impl<E> Parser<E, ()> for RangeFull
 where
-    E: From<ParserError>,
+    E: From<ParseError>,
 {
     type Output<'a> = char;
     type Kind = Keep;
@@ -32,7 +32,7 @@ where
 
 impl<E> Parser<E, ()> for &'static [char]
 where
-    E: From<ParserError>,
+    E: From<ParseError>,
 {
     type Output<'a> = char;
     type Kind = Keep;
@@ -49,7 +49,7 @@ where
         {
             Some((c.len_utf8(), c))
         } else {
-            errs.error(ParserError::ExpectedSymbol(self), input.cur..input.cur);
+            errs.error(ParseError::ExpectedSymbol(self), input.cur..input.cur);
             None
         }
     }
@@ -57,7 +57,7 @@ where
 
 impl<E, C> Parser<E, C> for &'static str
 where
-    E: From<ParserError>,
+    E: From<ParseError>,
 {
     type Output<'b> = ();
     type Kind = Ignore;
@@ -74,14 +74,14 @@ where
 
 impl<E, C> FixedLengthParser<E, C> for &'static str
 where
-    E: From<ParserError>,
+    E: From<ParseError>,
 {
     fn parsed_len(&self) -> usize {
         str::len(self)
     }
 }
 
-impl<F> Parser<ParserError, ()> for F
+impl<F> Parser<ParseError, ()> for F
 where
     F: Fn(char) -> bool,
 {
@@ -91,7 +91,7 @@ where
     fn parse<'a>(
         &mut self,
         input: Input<'a>,
-        _errs: impl ErrorHandler<ParserError>,
+        _errs: impl ErrorHandler<ParseError>,
         _ctx: Context<()>,
     ) -> ParserResult<Self::Output<'a>> {
         let c = input.slice().chars().next().filter(|c| self(*c))?;
@@ -101,7 +101,7 @@ where
 
 impl<E> Parser<E, ()> for char
 where
-    E: From<ParserError>,
+    E: From<ParseError>,
 {
     type Output<'a> = ();
     type Kind = Ignore;
@@ -115,7 +115,7 @@ where
         if input.slice().starts_with(*self) {
             Some((self.len_utf8(), ()))
         } else {
-            errs.error(ParserError::ExpectedChar(*self), input.cur..input.cur);
+            errs.error(ParseError::ExpectedChar(*self), input.cur..input.cur);
             None
         }
     }
@@ -123,7 +123,7 @@ where
 
 impl<E> Parser<E, ()> for RangeInclusive<char>
 where
-    E: From<ParserError>,
+    E: From<ParseError>,
 {
     type Output<'a> = char;
     type Kind = Keep;
@@ -141,7 +141,7 @@ where
             Some((c.len_utf8(), c))
         } else {
             errs.error(
-                ParserError::ExpectedRange(self.clone()),
+                ParseError::ExpectedRange(self.clone()),
                 input.cur..input.cur,
             );
             None
@@ -154,7 +154,7 @@ fn lit<E, C>(
     parser_name: &'static str,
 ) -> impl for<'a> FixedLengthParser<E, C, Output<'a> = (), Kind = Ignore>
 where
-    E: From<ParserError>,
+    E: From<ParseError>,
 {
     struct LitParser {
         lit: &'static str,
@@ -163,7 +163,7 @@ where
 
     impl<E, C> Parser<E, C> for LitParser
     where
-        E: From<ParserError>,
+        E: From<ParseError>,
     {
         type Kind = Ignore;
         type Output<'a> = ();
@@ -183,7 +183,7 @@ where
                 Some((self.lit.len(), ()))
             } else {
                 errs.error(
-                    ParserError::ExpectedLiteral(self.lit, self.parser_name),
+                    ParseError::ExpectedLiteral(self.lit, self.parser_name),
                     input.cur..input.cur + num_matching,
                 );
                 None
@@ -193,7 +193,7 @@ where
 
     impl<E, C> FixedLengthParser<E, C> for LitParser
     where
-        E: From<ParserError>,
+        E: From<ParseError>,
     {
         fn parsed_len(&self) -> usize {
             self.lit.len()
@@ -208,7 +208,7 @@ pub fn char_filter<E>(
     parser_name: &'static str,
 ) -> impl for<'a> Parser<E, Output<'a> = char, Kind = Keep>
 where
-    E: From<ParserError>,
+    E: From<ParseError>,
 {
     struct Filter<F> {
         f: F,
@@ -217,7 +217,7 @@ where
     impl<E, F, C> Parser<E, C> for Filter<F>
     where
         F: Fn(char) -> bool,
-        E: From<ParserError>,
+        E: From<ParseError>,
     {
         type Output<'a> = char;
         type Kind = Keep;
@@ -235,7 +235,7 @@ where
                 Some((c.len_utf8(), c))
             } else {
                 errs.error(
-                    ParserError::ExpectedToken(self.parser_name),
+                    ParseError::ExpectedToken(self.parser_name),
                     input.cur..input.cur,
                 );
                 None
