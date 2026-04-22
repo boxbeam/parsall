@@ -17,10 +17,6 @@ pub enum ParserError {
     ExpectedSymbol(&'static [char]),
     /// Thrown when one of a set of symbols is expected
     ExpectedRange(RangeInclusive<char>),
-    /// Thrown when a parsing operation expected to not find a specific value
-    IllegalToken(&'static str),
-    /// Thrown when a delimiter, such as a paren, is opened but never closed
-    UnmatchedDelimiter(&'static str),
     /// Thrown when parsing succeeds, but there are more tokens left in the input which were not consumed.
     UnexpectedToken,
 }
@@ -38,8 +34,6 @@ impl Display for ParserError {
             ),
             ParserError::ExpectedToken(token) => write!(f, "Expected {}", token.replace('_', " ")),
             ParserError::UnexpectedToken => write!(f, "Unexpected token"),
-            ParserError::UnmatchedDelimiter(delim) => write!(f, "Unmatched delimiter '{delim}'"),
-            ParserError::IllegalToken(token) => write!(f, "Illegal token while parsing '{token}'"),
             ParserError::ExpectedSymbol(items) => write!(f, "Expected one of {items:?}"),
             ParserError::ExpectedChar(c) => write!(f, "Expected '{c}'"),
             ParserError::ExpectedRange(range_inclusive) => {
