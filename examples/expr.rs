@@ -36,5 +36,5 @@ parser_fns! {
 }
 
 fn main() {
-    Parser::<ParseError>::repl(add);
+    Parser::<ParseError>::repl(expr);
 }
