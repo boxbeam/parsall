@@ -18,7 +18,7 @@ pub enum JSONValue {
 }
 
 parser_fns! {
-    StrChar(['"', '\\'].not().then(..)) -> char;
+    StrChar((['"', '\\'].not(), ..)) -> char;
 
     EscapeSeq('\\', ..) -> char;
 
@@ -28,7 +28,7 @@ parser_fns! {
 
     Digits(('0'..='9').rep(Ignore));
 
-    Int("-".opt().then(Digits).slice().try_map(str::parse).map(JSONValue::Int)) -> JSONValue, JSONError;
+    Int(("-".opt(), Digits).slice().try_map(str::parse).map(JSONValue::Int)) -> JSONValue, JSONError;
     Float(("-".opt(), Digits, ".", Digits).slice().try_map(str::parse).map(JSONValue::Float)) -> JSONValue, JSONError;
 
     Bool(pmatch!{
@@ -38,7 +38,7 @@ parser_fns! {
 
     List(Value.delim_by(",".pad(sep), ToVec).opt_default().pad(sep).wrapped("[", "]").map(JSONValue::List)) -> JSONValue, JSONError;
 
-    MapEntry(Str.then(":".pad(sep)).then(Value)) -> (String, JSONValue), JSONError;
+    MapEntry((Str, ":".pad(sep), Value)) -> (String, JSONValue), JSONError;
     Map(MapEntry.delim_by(",".pad(sep), collect()).opt_default().map(JSONValue::Map).pad(sep).wrapped("{", "}")) -> JSONValue, JSONError;
 
     pub Value(List.or(Map).or(Bool).or(Float).or(Int).or(Null).or(Str.map(JSONValue::String))) -> JSONValue, JSONError;

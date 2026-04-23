@@ -18,7 +18,7 @@ enum Operation {
 
 parser_fns! {
     digits(('0'..='9').rep(Ignore));
-    float(digits.then('.'.then(digits).opt()).slice().map(|s| s.parse().unwrap())) -> f64;
+    float((digits, ('.', digits).opt()).slice().map(|s| s.parse().unwrap())) -> f64;
 
     op(pmatch! {
         "+" => Operation::Add,
@@ -27,8 +27,8 @@ parser_fns! {
         "*" => Operation::Mul,
     }) -> Operation;
 
-    add(mul.delim_by(['+', '-'].lookahead().then(op).pad(sep), lfold(operate))) -> f64;
-    mul(term.delim_by(['*', '/'].lookahead().then(op).pad(sep), lfold(operate))) -> f64;
+    add(mul.delim_by((['+', '-'].lookahead(), op).pad(sep), lfold(operate))) -> f64;
+    mul(term.delim_by((['*', '/'].lookahead(), op).pad(sep), lfold(operate))) -> f64;
     neg('-', sep, term.map(|i| -i)) -> f64;
     term(neg.or(float).or(expr.pad(sep).wrapped("(", ")"))) -> f64;
 
