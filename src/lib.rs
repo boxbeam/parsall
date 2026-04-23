@@ -5,6 +5,7 @@ pub mod macros;
 pub mod output;
 pub mod parser_prims;
 pub mod parser_trait;
+pub mod tuple;
 
 pub mod prelude {
     pub use crate::{

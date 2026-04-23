@@ -1,71 +1,72 @@
-use crate::{
-    output::{Chain, ChainImpl},
-    prelude::Parser,
-};
+use crate::{output::ChainMode, prelude::Parser};
 
-macro_rules! chain_output {
-    ($lt:lifetime, $l:ty, $r:ty) => { <ChainImpl<<$l>::Kind, <$r>::Kind> as Chain>::Output<<$l>::Output<$lt>, <$r>::Output<$lt>>};
-    ($lt:lifetime, $l:ty, $r:ty, $c:ty) => { <ChainImpl<chain_kind!($l, $r), <$c>::Kind> as Chain>::Output<chain_output!('a, $l, $r), $c> };
-    ($lt:lifetime, $l:ty, $r:ty, $c:ty, $($rest:ty),+) => { chain_output!($lt, chain_output!($lt, $l, $r, $c), $($rest),+) }
+struct MutRefParser<'a, P>(&'a mut P);
+
+impl<'a, P, E, C> Parser<E, C> for MutRefParser<'a, P>
+where
+    P: Parser<E, C>,
+{
+    type Output<'b> = P::Output<'b>;
+
+    type Kind = P::Kind;
+
+    fn parse<'b>(
+        &mut self,
+        input: crate::Input<'b>,
+        errs: impl crate::prelude::ErrorHandler<E>,
+        ctx: crate::Context<C>,
+    ) -> crate::ParserResult<Self::Output<'b>> {
+        self.0.parse(input, errs, ctx)
+    }
+}
+
+macro_rules! chain_type {
+    ($lt:lifetime, $ty:ty) => { <$ty>::Output<$lt> };
+    ($lt:lifetime, $l:ty, $($rest:ty),+) => { <<$l>::Kind as ChainMode>::Output<chain_kind!($($rest),+), <$l>::Output<$lt>, chain_type!($lt, $($rest),+)> };
 }
 
 macro_rules! chain_kind {
-    ($l:ty, $r:ty) => {
-        <ChainImpl<<$l>::Kind, <$r>::Kind> as Chain>::NextKind
+    ($ty:ty) => { <$ty>::Kind };
+    ($ty:ty, $($rest:ty),+) => { <<$ty>::Kind as ChainMode>::NextKind<chain_kind!($($rest),+)> }
+}
+
+macro_rules! chain_parser {
+    ($first:expr) => {
+        MutRefParser(&mut $first)
     };
+    ($first:expr, $($rest:expr),+) => { MutRefParser(&mut $first).then(chain_parser!($($rest),+)) };
 }
 
-impl<A, B, E, C> Parser<E, C> for (A, B)
-where
-    A: Parser<E, C>,
-    B: Parser<E, C>,
-    ChainImpl<A::Kind, B::Kind>: Chain,
-{
-    type Output<'a> = chain_output!('a, A, B);
-    type Kind = chain_kind!(A, B);
+macro_rules! impl_parser_tuple {
+    ($($p:ident),+ ; $name:ident = $($expr:expr),+) => {
+        impl<Err, Ctx, $($p),+> Parser<Err, Ctx> for ($($p),+)
+        where
+            $($p: Parser<Err, Ctx>),+
+        {
+            type Output<'a> = chain_type!('a, $($p),+);
+            type Kind = chain_kind!($($p),+);
 
-    fn parse<'a>(
-        &mut self,
-        input: crate::Input<'a>,
-        errs: impl crate::prelude::ErrorHandler<E>,
-        ctx: crate::Context<C>,
-    ) -> crate::ParserResult<Self::Output<'a>> {
-        let mut offset = 0;
-        let (len, a) = self.0.parse(input, errs.clone(), ctx)?;
-        offset += len;
-        let (len, b) = self.1.parse(input, errs.clone(), ctx)?;
-        let output = ChainImpl::<A::Kind, B::Kind>::chain(a, b);
-        offset += len;
-        Some((offset, output))
+            fn parse<'a>(
+                &mut self,
+                input: crate::Input<'a>,
+                errs: impl crate::prelude::ErrorHandler<Err>,
+                ctx: crate::Context<Ctx>,
+            ) -> crate::ParserResult<Self::Output<'a>> {
+                let $name = self;
+                chain_parser!($($expr),+).parse(input, errs, ctx)
+            }
+        }
     }
 }
 
-impl<A, B, C, Err, Ctx> Parser<Err, Ctx> for (A, B, C)
-where
-    A: Parser<Err, Ctx>,
-    B: Parser<Err, Ctx>,
-    C: Parser<Err, Ctx>,
-    ChainImpl<A::Kind, B::Kind>: Chain,
-    ChainImpl<chain_kind!(A, B), C::Kind>: Chain,
-{
-    type Output<'a> = chain_output!('a, A, B, C);
-    type Kind = chain_kind!(A, B);
-
-    fn parse<'a>(
-        &mut self,
-        input: crate::Input<'a>,
-        errs: impl crate::prelude::ErrorHandler<Err>,
-        ctx: crate::Context<Ctx>,
-    ) -> crate::ParserResult<Self::Output<'a>> {
-        let mut offset = 0;
-        let (len, a) = self.0.parse(input, errs.clone(), ctx)?;
-        offset += len;
-        let (len, b) = self.1.parse(input, errs.clone(), ctx)?;
-        let chain = ChainImpl::<A::Kind, B::Kind>::chain(a, b);
-        offset += len;
-        let (len, c) = self.2.parse(input, errs.clone(), ctx)?;
-        let chain = ChainImpl::<chain_kind!(A, B), C::Kind>::chain(chain, c);
-        offset += len;
-        Some((offset, chain))
-    }
-}
+impl_parser_tuple!(A, B; x = x.0, x.1);
+impl_parser_tuple!(A, B, C; x = x.0, x.1, x.2);
+impl_parser_tuple!(A, B, C, D; x = x.0, x.1, x.2, x.3);
+impl_parser_tuple!(A, B, C, D, E; x = x.0, x.1, x.2, x.3, x.4);
+impl_parser_tuple!(A, B, C, D, E, F; x = x.0, x.1, x.2, x.3, x.4, x.5);
+impl_parser_tuple!(A, B, C, D, E, F, G; x = x.0, x.1, x.2, x.3, x.4, x.5, x.6);
+impl_parser_tuple!(A, B, C, D, E, F, G, H; x = x.0, x.1, x.2, x.3, x.4, x.5, x.6, x.7);
+impl_parser_tuple!(A, B, C, D, E, F, G, H, I; x = x.0, x.1, x.2, x.3, x.4, x.5, x.6, x.7, x.8);
+impl_parser_tuple!(A, B, C, D, E, F, G, H, I, J; x = x.0, x.1, x.2, x.3, x.4, x.5, x.6, x.7, x.8, x.9);
+impl_parser_tuple!(A, B, C, D, E, F, G, H, I, J, K; x = x.0, x.1, x.2, x.3, x.4, x.5, x.6, x.7, x.8, x.9, x.10);
+impl_parser_tuple!(A, B, C, D, E, F, G, H, I, J, K, L; x = x.0, x.1, x.2, x.3, x.4, x.5, x.6, x.7, x.8, x.9, x.10, x.11);
