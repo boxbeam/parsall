@@ -47,9 +47,9 @@ pub trait ErrorHandler<E>: Clone {
     fn error(&self, err: impl Into<E>, loc: Range<usize>);
 }
 
-impl<F, E> ErrorHandler<E> for &F
+impl<F, E> ErrorHandler<E> for F
 where
-    F: Fn(E, Range<usize>),
+    F: Fn(E, Range<usize>) + Clone,
 {
     fn error(&self, err: impl Into<E>, loc: Range<usize>) {
         self(err.into(), loc)
@@ -86,6 +86,9 @@ impl<E> ErrorHandler<E> for &ErrorCell<E> {
     fn error(&self, err: impl Into<E>, loc: Range<usize>) {
         unsafe {
             let inner = self.inner.get();
+            // if (*inner).as_ref().is_none_or() {
+
+            // }
             (*inner).replace(ErrorLocation(err.into(), loc));
         }
     }

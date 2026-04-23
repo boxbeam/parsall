@@ -104,7 +104,7 @@ macro_rules! parser_fn {
                     $($err_ret)? |
                     $crate::p!($($crate::not_drop!($parser $(, $match_name)?)),*) ;
                     $crate::names_pattern!($($($match_name ,)?)*) => $block
-                ), input, &|e, r| errs.error(e, r), ctx)?;
+                ), input, |e, r| errs.error(e, r), ctx)?;
                 Some((__len, val))
             }
         }

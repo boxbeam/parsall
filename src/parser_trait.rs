@@ -17,6 +17,7 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
         ctx: Context<Ctx>,
     ) -> ParserResult<Self::Output<'a>>;
 
+    #[inline(always)]
     fn try_match<'a>(
         &mut self,
         input: &'a str,
@@ -33,6 +34,7 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
         }
     }
 
+    #[inline(always)]
     fn repl<O>(mut self)
     where
         Self: Sized + for<'a> Parser<Err, Ctx, Output<'a> = O>,
@@ -51,6 +53,7 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
         }
     }
 
+    #[inline(always)]
     fn rep<Coll, K>(
         self,
         coll: Coll,
@@ -102,6 +105,7 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
         }
     }
 
+    #[inline(always)]
     fn or<P>(
         self,
         other: P,
@@ -148,6 +152,7 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
         Or { l: self, r: other }
     }
 
+    #[inline(always)]
     fn map<F, V>(self, f: F) -> impl for<'a> Parser<Err, Ctx, Output<'a> = V, Kind = Keep>
     where
         Self: Sized,
@@ -180,6 +185,7 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
         Map { p: self, f }
     }
 
+    #[inline(always)]
     fn try_map<F, V, E>(
         self,
         f: F,
@@ -223,6 +229,7 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
         TryMap { p: self, f }
     }
 
+    #[inline(always)]
     fn opt(
         self,
     ) -> impl for<'a> Parser<
@@ -262,6 +269,7 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
         Optional { p: self }
     }
 
+    #[inline(always)]
     fn opt_default<O>(self) -> impl for<'a> Parser<Err, Ctx, Output<'a> = O, Kind = Self::Kind>
     where
         Self: Sized + for<'a> Parser<Err, Ctx, Output<'a> = O>,
@@ -298,6 +306,7 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
         }
     }
 
+    #[inline(always)]
     fn drop(self) -> impl for<'a> Parser<Err, Ctx, Output<'a> = (), Kind = Ignore>
     where
         Self: Sized,
@@ -325,6 +334,7 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
         Drop { p: self }
     }
 
+    #[inline(always)]
     fn slice(self) -> impl for<'a> Parser<Err, Ctx, Output<'a> = &'a str, Kind = Keep>
     where
         Self: Sized,
@@ -353,6 +363,7 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
         Slice { p: self }
     }
 
+    #[inline(always)]
     fn delim_by<P, Coll, K>(
         self,
         delim: P,
@@ -421,6 +432,7 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
         }
     }
 
+    #[inline(always)]
     fn then<P>(
         self,
         other: P,
@@ -456,7 +468,7 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
                 let (l_len, l_val) = self.l.parse(input, errs.clone(), ctx)?;
                 let (r_len, r_val) = self.r.parse(
                     input.skip(l_len),
-                    &|e, mut r: Range<usize>| {
+                    |e, mut r: Range<usize>| {
                         if r.len() == 0 {
                             r.start = input.cur;
                         }
@@ -472,6 +484,7 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
         Then { l: self, r: other }
     }
 
+    #[inline(always)]
     fn map_err<'a, E2, F>(
         self,
         f: F,
@@ -512,6 +525,7 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
         }
     }
 
+    #[inline(always)]
     fn with_context<'a, C>(
         self,
         ctx: Ctx,
@@ -544,6 +558,7 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
         WithContext { p: self, c: ctx }
     }
 
+    #[inline(always)]
     fn wrapped(
         self,
         before: &'static str,
@@ -593,6 +608,7 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
         }
     }
 
+    #[inline(always)]
     fn lookahead(self) -> impl for<'a> Parser<Err, Ctx, Output<'a> = (), Kind = Ignore>
     where
         Self: Sized,
@@ -621,6 +637,7 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
         Lookahead { p: self }
     }
 
+    #[inline(always)]
     fn not(self) -> impl for<'a> Parser<Err, Ctx, Output<'a> = (), Kind = Ignore>
     where
         Self: Sized,
@@ -656,6 +673,7 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
         Not { p: self }
     }
 
+    #[inline(always)]
     fn pad<P>(
         self,
         pad: P,
@@ -700,6 +718,7 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
 pub trait FixedLengthParser<E, C>: Parser<E, C> {
     fn parsed_len(&self) -> usize;
 
+    #[inline(always)]
     fn lookbehind(self) -> impl for<'a> Parser<E, C, Output<'a> = (), Kind = Ignore>
     where
         Self: Sized,
@@ -732,6 +751,7 @@ pub trait FixedLengthParser<E, C>: Parser<E, C> {
         Lookbehind { p: self }
     }
 
+    #[inline(always)]
     fn negative_lookbehind(self) -> impl for<'a> Parser<E, C, Output<'a> = (), Kind = Ignore>
     where
         Self: Sized,
