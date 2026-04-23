@@ -3,12 +3,12 @@ use std::{io::Write, marker::PhantomData, ops::Range};
 use crate::{
     Context, ErrorLocation, Input, ParseError, ParserResult,
     error::{ErrorCell, ErrorHandler},
-    output::{Chain, ChainImpl, Collector, DelimitedCollector, Ignore, Keep, OptionalOutput},
+    output::{ChainMode, Collector, DelimitedCollector, Ignore, Keep, OptionalOutput},
 };
 
 pub trait Parser<Err = ParseError, Ctx = ()> {
     type Output<'a>;
-    type Kind;
+    type Kind: ChainMode;
 
     fn parse<'a>(
         &mut self,
@@ -63,6 +63,7 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
     where
         Self: Sized,
         Coll: for<'a> Collector<Self::Output<'a>, Kind = K>,
+        K: ChainMode,
     {
         struct Repeat<P, Coll, K> {
             p: P,
@@ -74,6 +75,7 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
         where
             P: Parser<E, C>,
             Coll: for<'a> Collector<P::Output<'a>, Kind = K>,
+            K: ChainMode,
         {
             type Kind = K;
             type Output<'a> = <Coll as Collector<P::Output<'a>>>::Container;
@@ -365,6 +367,7 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
         P: Parser<Err, Ctx>,
         Self: Sized,
         Coll: for<'a> DelimitedCollector<Self::Output<'a>, P::Output<'a>, Kind = K>,
+        K: ChainMode,
     {
         struct DelimBy<P1, P2, Coll, K> {
             elem: P1,
@@ -378,6 +381,7 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
             P1: Parser<E, C>,
             P2: Parser<E, C>,
             Coll: for<'a> DelimitedCollector<P1::Output<'a>, P2::Output<'a>, Kind = K>,
+            K: ChainMode,
         {
             type Output<'a> =
                 <Coll as DelimitedCollector<P1::Output<'a>, P2::Output<'a>>>::Container;
@@ -423,16 +427,12 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
     ) -> impl for<'a> Parser<
         Err,
         Ctx,
-        Output<'a> = <ChainImpl<Self::Kind, P::Kind> as Chain>::Output<
-            Self::Output<'a>,
-            P::Output<'a>,
-        >,
-        Kind = <ChainImpl<Self::Kind, P::Kind> as Chain>::NextKind,
+        Output<'a> = <Self::Kind as ChainMode>::Output<P::Kind, Self::Output<'a>, P::Output<'a>>,
+        Kind = <Self::Kind as ChainMode>::NextKind<P::Kind>,
     >
     where
         Self: Sized,
         P: Parser<Err, Ctx>,
-        ChainImpl<Self::Kind, P::Kind>: Chain,
     {
         struct Then<P1, P2> {
             l: P1,
@@ -443,11 +443,10 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
         where
             P1: Parser<E, C>,
             P2: Parser<E, C>,
-            ChainImpl<P1::Kind, P2::Kind>: Chain,
         {
-            type Kind = <ChainImpl<P1::Kind, P2::Kind> as Chain>::NextKind;
+            type Kind = <P1::Kind as ChainMode>::NextKind<P2::Kind>;
             type Output<'a> =
-                <ChainImpl<P1::Kind, P2::Kind> as Chain>::Output<P1::Output<'a>, P2::Output<'a>>;
+                <P1::Kind as ChainMode>::Output<P2::Kind, P1::Output<'a>, P2::Output<'a>>;
             fn parse<'a>(
                 &mut self,
                 input: Input<'a>,
@@ -465,7 +464,7 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
                     },
                     ctx,
                 )?;
-                let output = ChainImpl::<P1::Kind, P2::Kind>::chain(l_val, r_val);
+                let output = P1::Kind::chain(l_val, r_val);
                 Some((l_len + r_len, output))
             }
         }

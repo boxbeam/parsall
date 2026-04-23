@@ -4,7 +4,7 @@ pub struct ToVec;
 
 pub trait Collector<T> {
     type Container: Default;
-    type Kind;
+    type Kind: ChainMode;
 
     fn consume(&self, container: &mut Self::Container, elem: T);
 }
@@ -91,7 +91,7 @@ impl<T> Collector<T> for Ignore {
 
 pub trait DelimitedCollector<T, D> {
     type Container;
-    type Kind;
+    type Kind: ChainMode;
     fn from(&self, elem: T) -> Self::Container;
     fn consume(&mut self, container: Self::Container, delim: D, elem: T) -> Self::Container;
 }
@@ -179,52 +179,65 @@ impl OptionalOutput for Ignore {
     }
 }
 
-pub trait Chain {
-    type Output<A, B>;
-    type NextKind;
-
-    fn chain<A, B>(a: A, b: B) -> Self::Output<A, B>;
-}
-
 pub struct Ignore;
 pub struct Keep;
 
-pub struct ChainImpl<L, R> {
-    phantom: PhantomData<(L, R)>,
+pub trait ChainMode {
+    type Output<Next: ChainMode, L, R>;
+    type NextKind<Next: ChainMode>: ChainMode;
+    fn chain<M: ChainMode, L, R>(l: L, r: R) -> Self::Output<M, L, R>;
+
+    /// Output when Keep followed by Self
+    type OutputFromKeep<L, R>;
+    type NextKindFromKeep: ChainMode;
+    fn chain_from_keep<L, R>(l: L, r: R) -> Self::OutputFromKeep<L, R>;
+
+    /// Output when Ignore followed by Self
+    type OutputFromIgnore<L, R>;
+    type NextKindFromIgnore: ChainMode;
+    fn chain_from_ignore<L, R>(l: L, r: R) -> Self::OutputFromIgnore<L, R>;
 }
 
-impl Chain for ChainImpl<Keep, Keep> {
-    type Output<A, B> = (A, B);
-    type NextKind = Keep;
+impl ChainMode for Keep {
+    type Output<Next: ChainMode, L, R> = Next::OutputFromKeep<L, R>;
+    type NextKind<Next: ChainMode> = Next::NextKindFromKeep;
+    fn chain<M: ChainMode, L, R>(l: L, r: R) -> Self::Output<M, L, R> {
+        M::chain_from_keep(l, r)
+    }
 
-    fn chain<A, B>(a: A, b: B) -> Self::Output<A, B> {
-        (a, b)
+    type OutputFromKeep<L, R> = (L, R);
+    type NextKindFromKeep = Keep;
+
+    fn chain_from_keep<L, R>(l: L, r: R) -> Self::OutputFromKeep<L, R> {
+        (l, r)
+    }
+
+    type OutputFromIgnore<L, R> = R;
+    type NextKindFromIgnore = Keep;
+
+    fn chain_from_ignore<L, R>(_l: L, r: R) -> Self::OutputFromIgnore<L, R> {
+        r
     }
 }
 
-impl Chain for ChainImpl<Keep, Ignore> {
-    type Output<A, B> = A;
-    type NextKind = Keep;
-
-    fn chain<A, B>(a: A, _b: B) -> Self::Output<A, B> {
-        a
+impl ChainMode for Ignore {
+    type Output<Next: ChainMode, L, R> = Next::OutputFromIgnore<L, R>;
+    type NextKind<Next: ChainMode> = Next::NextKindFromIgnore;
+    fn chain<M: ChainMode, L, R>(l: L, r: R) -> Self::Output<M, L, R> {
+        M::chain_from_ignore(l, r)
     }
-}
 
-impl Chain for ChainImpl<Ignore, Keep> {
-    type Output<A, B> = B;
-    type NextKind = Keep;
+    type OutputFromKeep<L, R> = L;
+    type NextKindFromKeep = Keep;
 
-    fn chain<A, B>(_a: A, b: B) -> Self::Output<A, B> {
-        b
+    fn chain_from_keep<L, R>(l: L, _r: R) -> Self::OutputFromKeep<L, R> {
+        l
     }
-}
 
-impl Chain for ChainImpl<Ignore, Ignore> {
-    type Output<A, B> = ();
-    type NextKind = Ignore;
+    type OutputFromIgnore<L, R> = ();
+    type NextKindFromIgnore = Ignore;
 
-    fn chain<A, B>(_a: A, _b: B) -> Self::Output<A, B> {
+    fn chain_from_ignore<L, R>(_l: L, _r: R) -> Self::OutputFromIgnore<L, R> {
         ()
     }
 }
