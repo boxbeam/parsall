@@ -29,7 +29,7 @@ parser_fns! {
     Digits(('0'..='9').rep(Ignore));
 
     Int("-".opt().then(Digits).slice().try_map(str::parse).map(JSONValue::Int)) -> JSONValue, JSONError;
-    Float(p!("-".opt(), Digits, ".", Digits).slice().try_map(str::parse).map(JSONValue::Float)) -> JSONValue, JSONError;
+    Float(p!["-".opt(), Digits, ".", Digits].slice().try_map(str::parse).map(JSONValue::Float)) -> JSONValue, JSONError;
 
     Bool(pmatch!{
         "true" => JSONValue::Bool(true),
