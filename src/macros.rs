@@ -94,17 +94,17 @@ macro_rules! parser_fn {
             type Output<'a> = $ret;
             type Kind = Keep;
 
-            fn parse<'a, H>(
+            fn parse<'a>(
                 &mut self,
                 input: $crate::Input<'a>,
-                errs: H,
+                errs: impl $crate::error::ErrorHandler<E>,
                 ctx: &mut (),
-            ) -> $crate::ParseResult<$ret> where H: $crate::error::ErrorHandler, H::Err: From<E> {
+            ) -> $crate::ParseResult<$ret> {
                 let (__len, val) = Parser::<$crate::err_type!($($err_ret)?), _>::parse(&mut $crate::map_or_try_map!(
                     $($err_ret)? |
                     $crate::p!($($crate::not_drop!($parser $(, $match_name)?)),*) ;
                     $crate::names_pattern!($($($match_name ,)?)*) => $block
-                ), input, errs, ctx)?;
+                ), input, |e, r| errs.error(e, r), ctx)?;
                 Some((__len, val))
             }
         }
@@ -117,13 +117,14 @@ macro_rules! parser_fn {
             type Output<'a> = $crate::ret_type!($($ret)?);
             type Kind = $crate::keep_type!($($ret)?);
 
-            fn parse<'a, H>(
+            fn parse<'a>(
                 &mut self,
                 input: $crate::Input<'a>,
-                errs: H,
+                errs: impl $crate::error::ErrorHandler<E>,
                 ctx: &mut (),
-            ) -> $crate::ParseResult<$crate::ret_type!($($ret)?)> where H: ErrorHandler, H::Err: From<E> {
-                let (__len, val) = $crate::parser_trait::Parser::<$crate::err_type!($($($err_ret)?)?), ()>::parse(&mut $crate::p!($($parser),*), input, errs, ctx)?;
+            ) -> $crate::ParseResult<$crate::ret_type!($($ret)?)> {
+                // Happening here, from the closure
+                let (__len, val) = $crate::parser_trait::Parser::<$crate::err_type!($($($err_ret)?)?), ()>::parse(&mut $crate::p!($($parser),*), input, |e, r| errs.error(e, r), ctx)?;
                 Some((__len, val))
             }
         }

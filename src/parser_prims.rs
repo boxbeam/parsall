@@ -15,16 +15,12 @@ where
     type Output<'a> = char;
     type Kind = Keep;
 
-    fn parse<'a, H>(
+    fn parse<'a>(
         &mut self,
         input: Input<'a>,
-        _errs: H,
+        _errs: impl ErrorHandler<E>,
         _ctx: Context<()>,
-    ) -> ParseResult<Self::Output<'a>>
-    where
-        H: ErrorHandler,
-        H::Err: From<E>,
-    {
+    ) -> ParseResult<Self::Output<'a>> {
         let c = input.slice().chars().next();
         if let Some(c) = c {
             Some((c.len_utf8(), c))
@@ -41,26 +37,19 @@ where
     type Output<'a> = char;
     type Kind = Keep;
 
-    fn parse<'a, H>(
+    fn parse<'a>(
         &mut self,
         input: Input<'a>,
-        errs: H,
+        errs: impl ErrorHandler<E>,
         _ctx: Context<()>,
-    ) -> ParseResult<Self::Output<'a>>
-    where
-        H: ErrorHandler,
-        H::Err: From<E>,
-    {
+    ) -> ParseResult<Self::Output<'a>> {
         let c = input.slice().chars().next();
         if let Some(c) = c
             && self.contains(&c)
         {
             Some((c.len_utf8(), c))
         } else {
-            errs.error(
-                E::from(ParseError::ExpectedSymbol(self)),
-                input.cur..input.cur,
-            );
+            errs.error(ParseError::ExpectedSymbol(self), input.cur..input.cur);
             None
         }
     }
@@ -73,16 +62,12 @@ where
     type Output<'b> = ();
     type Kind = Ignore;
 
-    fn parse<'a, H>(
+    fn parse<'a>(
         &mut self,
         input: Input<'a>,
-        errs: H,
+        errs: impl ErrorHandler<E>,
         ctx: Context<C>,
-    ) -> ParseResult<Self::Output<'a>>
-    where
-        H: ErrorHandler,
-        H::Err: From<E>,
-    {
+    ) -> ParseResult<Self::Output<'a>> {
         lit(self, self).parse(input, errs, ctx)
     }
 }
@@ -104,16 +89,12 @@ where
     type Output<'a> = char;
     type Kind = Keep;
 
-    fn parse<'a, H>(
+    fn parse<'a>(
         &mut self,
         input: Input<'a>,
-        _errs: H,
+        _errs: impl ErrorHandler<E>,
         _ctx: Context<()>,
-    ) -> ParseResult<Self::Output<'a>>
-    where
-        H: ErrorHandler,
-        H::Err: From<E>,
-    {
+    ) -> ParseResult<Self::Output<'a>> {
         let c = input.slice().chars().next().filter(|c| self(*c))?;
         Some((c.len_utf8(), c))
     }
@@ -126,23 +107,16 @@ where
     type Output<'a> = ();
     type Kind = Ignore;
 
-    fn parse<'a, H>(
+    fn parse<'a>(
         &mut self,
         input: Input<'a>,
-        errs: H,
+        errs: impl ErrorHandler<E>,
         _ctx: Context<C>,
-    ) -> ParseResult<Self::Output<'a>>
-    where
-        H: ErrorHandler,
-        H::Err: From<E>,
-    {
+    ) -> ParseResult<Self::Output<'a>> {
         if input.slice().starts_with(*self) {
             Some((self.len_utf8(), ()))
         } else {
-            errs.error(
-                E::from(ParseError::ExpectedChar(*self)),
-                input.cur..input.cur,
-            );
+            errs.error(ParseError::ExpectedChar(*self), input.cur..input.cur);
             None
         }
     }
@@ -164,16 +138,12 @@ where
     type Output<'a> = char;
     type Kind = Keep;
 
-    fn parse<'a, H>(
+    fn parse<'a>(
         &mut self,
         input: Input<'a>,
-        errs: H,
+        errs: impl ErrorHandler<E>,
         _ctx: Context<()>,
-    ) -> ParseResult<Self::Output<'a>>
-    where
-        H: ErrorHandler,
-        H::Err: From<E>,
-    {
+    ) -> ParseResult<Self::Output<'a>> {
         let c = input.slice().chars().next();
         if let Some(c) = c
             && self.contains(&c)
@@ -181,7 +151,7 @@ where
             Some((c.len_utf8(), c))
         } else {
             errs.error(
-                E::from(ParseError::ExpectedRange(self.clone())),
+                ParseError::ExpectedRange(self.clone()),
                 input.cur..input.cur,
             );
             None
@@ -189,7 +159,7 @@ where
     }
 }
 
-fn lit<E, C>(
+const fn lit<E, C>(
     lit: &'static str,
     parser_name: &'static str,
 ) -> impl for<'a> FixedLengthParser<E, C, Output<'a> = (), Kind = Ignore>
@@ -207,11 +177,12 @@ where
     {
         type Kind = Ignore;
         type Output<'a> = ();
-        fn parse<'a, H>(&mut self, input: Input, errs: H, _ctx: Context<C>) -> ParseResult<()>
-        where
-            H: ErrorHandler,
-            H::Err: From<E>,
-        {
+        fn parse(
+            &mut self,
+            input: Input,
+            errs: impl ErrorHandler<E>,
+            _ctx: Context<C>,
+        ) -> ParseResult<()> {
             let num_matching = input
                 .slice()
                 .bytes()
@@ -222,7 +193,7 @@ where
                 Some((self.lit.len(), ()))
             } else {
                 errs.error(
-                    E::from(ParseError::ExpectedLiteral(self.lit, self.parser_name)),
+                    ParseError::ExpectedLiteral(self.lit, self.parser_name),
                     input.cur..input.cur + num_matching,
                 );
                 None
@@ -261,16 +232,12 @@ where
         type Output<'a> = char;
         type Kind = Keep;
 
-        fn parse<'a, H>(
+        fn parse(
             &mut self,
             input: Input,
-            errs: H,
+            errs: impl ErrorHandler<E>,
             _ctx: Context<C>,
-        ) -> ParseResult<Self::Output<'_>>
-        where
-            H: ErrorHandler,
-            H::Err: From<E>,
-        {
+        ) -> ParseResult<Self::Output<'_>> {
             let next_char = input.slice().chars().next();
             if let Some(c) = next_char
                 && (self.f)(c)
@@ -278,7 +245,7 @@ where
                 Some((c.len_utf8(), c))
             } else {
                 errs.error(
-                    E::from(ParseError::ExpectedToken(self.parser_name)),
+                    ParseError::ExpectedToken(self.parser_name),
                     input.cur..input.cur,
                 );
                 None

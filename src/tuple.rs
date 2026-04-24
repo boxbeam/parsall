@@ -1,4 +1,4 @@
-use crate::{error::ErrorHandler, output::ChainMode, prelude::Parser};
+use crate::{output::ChainMode, prelude::Parser};
 
 struct MutRefParser<'a, P>(&'a mut P);
 
@@ -10,16 +10,12 @@ where
 
     type Kind = P::Kind;
 
-    fn parse<'b, H>(
+    fn parse<'b>(
         &mut self,
         input: crate::Input<'b>,
-        errs: H,
+        errs: impl crate::prelude::ErrorHandler<E>,
         ctx: crate::Context<C>,
-    ) -> crate::ParseResult<Self::Output<'b>>
-    where
-        H: ErrorHandler,
-        H::Err: From<E>,
-    {
+    ) -> crate::ParseResult<Self::Output<'b>> {
         self.0.parse(input, errs, ctx)
     }
 }
@@ -50,12 +46,12 @@ macro_rules! impl_parser_tuple {
             type Output<'a> = chain_type!('a, $($p),+);
             type Kind = chain_kind!($($p),+);
 
-            fn parse<'a, Handler>(
+            fn parse<'a>(
                 &mut self,
                 input: crate::Input<'a>,
-                errs: Handler,
+                errs: impl crate::prelude::ErrorHandler<Err>,
                 ctx: crate::Context<Ctx>,
-            ) -> crate::ParseResult<Self::Output<'a>> where Handler: $crate::error::ErrorHandler, Handler::Err: From<Err> {
+            ) -> crate::ParseResult<Self::Output<'a>> {
                 let $name = self;
                 chain_parser!($($expr),+).parse(input, errs, ctx)
             }
