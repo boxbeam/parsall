@@ -53,27 +53,6 @@ parser_fns! {
     pub Value("".then(Value)) -> JSONValue, JSONError;
 }
 
-struct _Lookahead;
-
-impl<E> Parser<E, ()> for _Lookahead
-where
-    E: From<JSONError>,
-{
-    type Output<'a> = JSONValue;
-    type Kind = Keep;
-    fn parse<'a>(
-        &mut self,
-        input: parsall::Input<'a>,
-        errs: impl parsall::error::ErrorHandler<E>,
-        ctx: &mut (),
-    ) -> parsall::ParseResult<JSONValue> {
-        match input.src.chars().next() {
-            Some('{') => Parser::<E, ()>::parse(&mut Map, input, errs, ctx),
-            _ => None,
-        }
-    }
-}
-
 fn thing() {}
 
 #[derive(Debug)]

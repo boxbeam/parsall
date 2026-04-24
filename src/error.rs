@@ -2,6 +2,7 @@ use std::{
     cell::UnsafeCell,
     error::Error,
     fmt::{Debug, Display},
+    marker::PhantomData,
     ops::{Range, RangeInclusive},
 };
 
@@ -43,26 +44,25 @@ impl Display for ParseError {
     }
 }
 
-pub trait ErrorHandler<E>: Clone {
-    fn error(&self, err: impl Into<E>, loc: Range<usize>);
+pub trait ErrorHandler: Clone {
+    type Err: From<ParseError>;
+    fn error(&self, err: impl Into<Self::Err>, loc: Range<usize>);
 }
 
-impl<F, E> ErrorHandler<E> for F
-where
-    F: Fn(E, Range<usize>) + Clone,
-{
-    fn error(&self, err: impl Into<E>, loc: Range<usize>) {
-        self(err.into(), loc)
+#[derive(Default)]
+pub struct DebugErrorHandler<E>(PhantomData<E>);
+
+impl<E> Clone for DebugErrorHandler<E> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
     }
 }
 
-#[derive(Clone)]
-pub struct DebugErrorHandler;
-
-impl<E> ErrorHandler<E> for DebugErrorHandler
+impl<E> ErrorHandler for DebugErrorHandler<E>
 where
-    E: Debug,
+    E: Debug + From<ParseError>,
 {
+    type Err = E;
     fn error(&self, err: impl Into<E>, loc: Range<usize>) {
         let err = err.into();
         eprintln!("Error at {loc:?}: {err:?}");
@@ -82,7 +82,11 @@ impl<E> Default for ErrorCell<E> {
     }
 }
 
-impl<E> ErrorHandler<E> for &ErrorCell<E> {
+impl<E> ErrorHandler for &ErrorCell<E>
+where
+    E: From<ParseError>,
+{
+    type Err = E;
     fn error(&self, err: impl Into<E>, loc: Range<usize>) {
         unsafe {
             let inner = self.inner.get();

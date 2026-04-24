@@ -1,4 +1,4 @@
-use std::{io::Write, marker::PhantomData, ops::Range};
+use std::{io::Write, marker::PhantomData};
 
 use crate::{
     Context, ErrorLocation, Input, ParseError, ParseResult,
@@ -10,12 +10,15 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
     type Output<'a>;
     type Kind: ChainMode;
 
-    fn parse<'a>(
+    fn parse<'a, H>(
         &mut self,
         input: Input<'a>,
-        errs: impl ErrorHandler<Err>,
+        errs: H,
         ctx: Context<Ctx>,
-    ) -> ParseResult<Self::Output<'a>>;
+    ) -> ParseResult<Self::Output<'a>>
+    where
+        H: ErrorHandler,
+        H::Err: From<Err>;
 
     fn try_match<'a>(
         &mut self,
@@ -23,6 +26,7 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
     ) -> Result<Self::Output<'a>, Option<ErrorLocation<Err>>>
     where
         Ctx: Default,
+        Err: From<ParseError>,
     {
         let input = Input { src: input, cur: 0 };
         let mut ctx = Default::default();
@@ -38,7 +42,7 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
     where
         Self: Sized + for<'a> Parser<Err, Ctx, Output<'a> = O>,
         Ctx: Default,
-        Err: std::fmt::Debug,
+        Err: std::fmt::Debug + From<ParseError>,
         O: std::fmt::Debug,
     {
         print!("> ");
@@ -81,12 +85,16 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
         {
             type Kind = K;
             type Output<'a> = <Coll as Collector<P::Output<'a>>>::Container;
-            fn parse<'a>(
+            fn parse<'a, H>(
                 &mut self,
                 input: Input<'a>,
-                errs: impl ErrorHandler<E>,
+                errs: H,
                 ctx: Context<C>,
-            ) -> ParseResult<Self::Output<'a>> {
+            ) -> ParseResult<Self::Output<'a>>
+            where
+                H: ErrorHandler,
+                H::Err: From<E>,
+            {
                 let (mut offset, _first) = self.p.parse(input, errs.clone(), ctx)?;
                 let mut elems = Coll::Container::default();
                 while let Some((len, elem)) = self.p.parse(input.skip(offset), errs.clone(), ctx) {
@@ -125,13 +133,17 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
         {
             type Kind = P1::Kind;
             type Output<'a> = P1::Output<'a>;
-            fn parse<'a>(
+            fn parse<'a, H>(
                 &mut self,
                 input: Input<'a>,
-                errs: impl ErrorHandler<E>,
+                errs: H,
                 ctx: Context<C>,
-            ) -> ParseResult<P1::Output<'a>> {
-                let err = ErrorCell::default();
+            ) -> ParseResult<P1::Output<'a>>
+            where
+                H: ErrorHandler,
+                H::Err: From<E>,
+            {
+                let err = ErrorCell::<H::Err>::default();
                 let parsed = self.l.parse(input, &err, ctx);
                 if parsed.is_some() {
                     return parsed;
@@ -169,12 +181,11 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
         {
             type Kind = Keep;
             type Output<'a> = V;
-            fn parse(
-                &mut self,
-                input: Input,
-                errs: impl ErrorHandler<E>,
-                ctx: Context<C>,
-            ) -> ParseResult<V> {
+            fn parse<'a, H>(&mut self, input: Input<'a>, errs: H, ctx: Context<C>) -> ParseResult<V>
+            where
+                H: ErrorHandler,
+                H::Err: From<E>,
+            {
                 self.p
                     .parse(input, errs, ctx)
                     .map(|(len, val)| (len, (self.f)(val)))
@@ -192,7 +203,7 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
     where
         Self: Sized,
         F: for<'a> Fn(Self::Output<'a>) -> Result<V, E>,
-        E: Into<Err>,
+        Err: From<E>,
     {
         struct TryMap<P, F> {
             p: P,
@@ -203,21 +214,21 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
         where
             P: Parser<E, C>,
             F: for<'a> Fn(P::Output<'a>) -> Result<V, E2>,
-            E2: Into<E>,
+            E: From<E2>,
         {
             type Kind = P::Kind;
             type Output<'a> = V;
-            fn parse(
-                &mut self,
-                input: Input,
-                errs: impl ErrorHandler<E>,
-                ctx: Context<C>,
-            ) -> ParseResult<V> {
+            fn parse<'a, H>(&mut self, input: Input, errs: H, ctx: Context<C>) -> ParseResult<V>
+            where
+                H: ErrorHandler,
+                H::Err: From<E>,
+            {
                 let (len, result) = self.p.parse(input, errs.clone(), ctx)?;
                 let result = (self.f)(result);
                 match result {
                     Ok(v) => Some((len, v)),
                     Err(e) => {
+                        let e: E = e.into();
                         errs.error(e, input.cur..input.cur + len);
                         None
                     }
@@ -252,12 +263,16 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
             type Output<'a> = <P::Kind as OptionalOutput>::Output<Option<P::Output<'a>>>;
             type Kind = P::Kind;
 
-            fn parse<'a>(
+            fn parse<'a, H>(
                 &mut self,
                 input: Input<'a>,
-                errs: impl ErrorHandler<Err>,
+                errs: H,
                 ctx: Context<Ctx>,
-            ) -> ParseResult<Self::Output<'a>> {
+            ) -> ParseResult<Self::Output<'a>>
+            where
+                H: ErrorHandler,
+                H::Err: From<Err>,
+            {
                 match self.p.parse(input, errs, ctx) {
                     Some((len, elem)) => Some((len, P::Kind::convert(Some(elem)))),
                     None => Some((0, P::Kind::convert(None))),
@@ -286,12 +301,16 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
             type Output<'a> = O;
             type Kind = P::Kind;
 
-            fn parse<'a>(
+            fn parse<'a, H>(
                 &mut self,
                 input: Input<'a>,
-                errs: impl ErrorHandler<Err>,
+                errs: H,
                 ctx: Context<Ctx>,
-            ) -> ParseResult<Self::Output<'a>> {
+            ) -> ParseResult<Self::Output<'a>>
+            where
+                H: ErrorHandler,
+                H::Err: From<Err>,
+            {
                 match self.p.parse(input, errs, ctx) {
                     Some((len, elem)) => Some((len, elem)),
                     None => Some((0, O::default())),
@@ -320,12 +339,16 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
             type Output<'a> = ();
             type Kind = Ignore;
 
-            fn parse<'a>(
+            fn parse<'a, H>(
                 &mut self,
                 input: Input<'a>,
-                errs: impl ErrorHandler<E>,
+                errs: H,
                 ctx: Context<C>,
-            ) -> ParseResult<Self::Output<'a>> {
+            ) -> ParseResult<Self::Output<'a>>
+            where
+                H: ErrorHandler,
+                H::Err: From<E>,
+            {
                 let (len, _) = self.p.parse(input, errs, ctx)?;
                 Some((len, ()))
             }
@@ -348,12 +371,16 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
             type Output<'a> = P::Output<'a>;
             type Kind = Keep;
 
-            fn parse<'a>(
+            fn parse<'a, H>(
                 &mut self,
                 input: Input<'a>,
-                errs: impl ErrorHandler<E>,
+                errs: H,
                 ctx: Context<C>,
-            ) -> ParseResult<Self::Output<'a>> {
+            ) -> ParseResult<Self::Output<'a>>
+            where
+                H: ErrorHandler,
+                H::Err: From<E>,
+            {
                 let (len, val) = self.p.parse(input, errs, ctx)?;
                 Some((len, val))
             }
@@ -375,12 +402,16 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
             type Output<'a> = &'a str;
             type Kind = Keep;
 
-            fn parse<'a>(
+            fn parse<'a, H>(
                 &mut self,
                 input: Input<'a>,
-                errs: impl ErrorHandler<E>,
+                errs: H,
                 ctx: Context<C>,
-            ) -> ParseResult<Self::Output<'a>> {
+            ) -> ParseResult<Self::Output<'a>>
+            where
+                H: ErrorHandler,
+                H::Err: From<E>,
+            {
                 let (len, _) = self.p.parse(input, errs, ctx)?;
                 let slice = &input.src[input.cur..input.cur + len];
                 Some((len, slice))
@@ -424,12 +455,16 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
                 <Coll as DelimitedCollector<P1::Output<'a>, P2::Output<'a>>>::Container;
             type Kind = K;
 
-            fn parse<'a>(
+            fn parse<'a, H>(
                 &mut self,
                 input: Input<'a>,
-                errs: impl ErrorHandler<E>,
+                errs: H,
                 ctx: Context<C>,
-            ) -> ParseResult<Self::Output<'a>> {
+            ) -> ParseResult<Self::Output<'a>>
+            where
+                H: ErrorHandler,
+                H::Err: From<E>,
+            {
                 let (mut offset, first) = self.elem.parse(input, errs.clone(), ctx)?;
                 let mut container = self.coll.from(first);
                 while let Some((delim_len, delim)) =
@@ -485,12 +520,16 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
             type Kind = <P1::Kind as ChainMode>::NextKind<P2::Kind>;
             type Output<'a> =
                 <P1::Kind as ChainMode>::Output<P2::Kind, P1::Output<'a>, P2::Output<'a>>;
-            fn parse<'a>(
+            fn parse<'a, H>(
                 &mut self,
                 input: Input<'a>,
-                errs: impl ErrorHandler<E>,
+                errs: H,
                 ctx: Context<C>,
-            ) -> ParseResult<Self::Output<'a>> {
+            ) -> ParseResult<Self::Output<'a>>
+            where
+                H: ErrorHandler,
+                H::Err: From<E>,
+            {
                 let (l_len, l_val) = self.l.parse(input, errs.clone(), ctx)?;
                 let (r_len, r_val) = self.r.parse(input.skip(l_len), errs, ctx)?;
                 let output = P1::Kind::chain(l_val, r_val);
@@ -499,47 +538,6 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
         }
 
         Then { l: self, r: other }
-    }
-
-    #[inline(always)]
-    fn map_err<'a, E2, F>(
-        self,
-        f: F,
-    ) -> impl Parser<E2, Ctx, Output<'a> = Self::Output<'a>, Kind = Self::Kind>
-    where
-        Self: Sized,
-        F: Fn(Err) -> E2,
-    {
-        struct MapErr<P, F, E> {
-            p: P,
-            f: F,
-            phantom: PhantomData<E>,
-        }
-
-        impl<P, F, C, E, E2> Parser<E2, C> for MapErr<P, F, E>
-        where
-            P: Parser<E, C>,
-            F: Fn(E) -> E2,
-        {
-            type Output<'a> = P::Output<'a>;
-            type Kind = P::Kind;
-
-            fn parse<'a>(
-                &mut self,
-                input: Input<'a>,
-                errs: impl ErrorHandler<E2>,
-                ctx: Context<C>,
-            ) -> ParseResult<Self::Output<'a>> {
-                let handler = |err: E, loc| errs.error((self.f)(err), loc);
-                self.p.parse(input, &handler, ctx)
-            }
-        }
-
-        MapErr {
-            p: self,
-            f,
-            phantom: PhantomData,
-        }
     }
 
     #[inline(always)]
@@ -562,12 +560,16 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
             type Output<'a> = P::Output<'a>;
             type Kind = P::Kind;
 
-            fn parse<'a>(
+            fn parse<'a, H>(
                 &mut self,
                 input: Input<'a>,
-                errs: impl ErrorHandler<E>,
+                errs: H,
                 _ctx: Context<()>,
-            ) -> ParseResult<Self::Output<'a>> {
+            ) -> ParseResult<Self::Output<'a>>
+            where
+                H: ErrorHandler,
+                H::Err: From<E>,
+            {
                 self.p.parse(input, errs, &mut self.c)
             }
         }
@@ -599,20 +601,24 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
             type Output<'a> = P::Output<'a>;
             type Kind = P::Kind;
 
-            fn parse<'a>(
+            fn parse<'a, H>(
                 &mut self,
                 input: Input<'a>,
-                errs: impl ErrorHandler<E>,
+                errs: H,
                 ctx: Context<C>,
-            ) -> ParseResult<Self::Output<'a>> {
-                let errs_clone = errs.clone();
-                let handler = |e: ParseError, loc| errs_clone.error(E::from(e), loc);
-                Parser::parse(&mut self.before, input, &handler, &mut ())?;
-                let (len, val) = self.p.parse(input.skip(self.before.len()), errs, ctx)?;
+            ) -> ParseResult<Self::Output<'a>>
+            where
+                H: ErrorHandler,
+                H::Err: From<E>,
+            {
+                Parser::parse(&mut self.before, input, errs.clone(), &mut ())?;
+                let (len, val) = self
+                    .p
+                    .parse(input.skip(self.before.len()), errs.clone(), ctx)?;
                 Parser::parse(
                     &mut self.after,
                     input.skip(self.before.len() + len),
-                    &handler,
+                    errs.clone(),
                     &mut (),
                 )?;
                 Some((self.before.len() + self.after.len() + len, val))
@@ -635,19 +641,23 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
         struct Lookahead<P> {
             p: P,
         }
-        impl<P, C, E> Parser<C, E> for Lookahead<P>
+        impl<P, E, C> Parser<E, C> for Lookahead<P>
         where
-            P: Parser<C, E>,
+            P: Parser<E, C>,
         {
             type Output<'a> = P::Output<'a>;
             type Kind = Ignore;
 
-            fn parse<'a>(
+            fn parse<'a, H>(
                 &mut self,
                 input: Input<'a>,
-                errs: impl ErrorHandler<C>,
-                ctx: Context<E>,
-            ) -> ParseResult<Self::Output<'a>> {
+                errs: H,
+                ctx: Context<C>,
+            ) -> ParseResult<Self::Output<'a>>
+            where
+                H: ErrorHandler,
+                H::Err: From<E>,
+            {
                 let (_len, val) = self.p.parse(input, errs, ctx)?;
                 Some((0, val))
             }
@@ -672,15 +682,19 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
             type Output<'a> = ();
             type Kind = Ignore;
 
-            fn parse<'a>(
+            fn parse<'a, H>(
                 &mut self,
                 input: Input<'a>,
-                errs: impl ErrorHandler<E>,
+                errs: H,
                 ctx: Context<C>,
-            ) -> ParseResult<Self::Output<'a>> {
+            ) -> ParseResult<Self::Output<'a>>
+            where
+                H: ErrorHandler,
+                H::Err: From<E>,
+            {
                 let result = self.p.parse(input, errs.clone(), ctx);
                 if result.is_some() {
-                    errs.error(ParseError::UnexpectedToken, input.cur..input.cur);
+                    errs.error(E::from(ParseError::UnexpectedToken), input.cur..input.cur);
                     None
                 } else {
                     Some((0, ()))
@@ -713,12 +727,16 @@ pub trait Parser<Err = ParseError, Ctx = ()> {
 
             type Kind = P1::Kind;
 
-            fn parse<'a>(
+            fn parse<'a, H>(
                 &mut self,
                 input: Input<'a>,
-                errs: impl ErrorHandler<E>,
+                errs: H,
                 ctx: Context<C>,
-            ) -> ParseResult<Self::Output<'a>> {
+            ) -> ParseResult<Self::Output<'a>>
+            where
+                H: ErrorHandler,
+                H::Err: From<E>,
+            {
                 let (len, _) = self.pad.parse(input, errs.clone(), ctx)?;
                 let mut offset = len;
                 let (len, val) = self.elem.parse(input.skip(offset), errs.clone(), ctx)?;
@@ -743,19 +761,23 @@ pub trait FixedLengthParser<E, C>: Parser<E, C> {
         struct Lookbehind<P> {
             p: P,
         }
-        impl<P, C, E> Parser<C, E> for Lookbehind<P>
+        impl<P, E, C> Parser<E, C> for Lookbehind<P>
         where
-            P: FixedLengthParser<C, E>,
+            P: FixedLengthParser<E, C>,
         {
             type Output<'a> = ();
             type Kind = Ignore;
 
-            fn parse<'a>(
+            fn parse<'a, H>(
                 &mut self,
                 input: Input<'a>,
-                errs: impl ErrorHandler<C>,
-                ctx: Context<E>,
-            ) -> ParseResult<Self::Output<'a>> {
+                errs: H,
+                ctx: Context<C>,
+            ) -> ParseResult<Self::Output<'a>>
+            where
+                H: ErrorHandler,
+                H::Err: From<E>,
+            {
                 let new_input = Input {
                     src: input.src,
                     cur: input.cur - self.p.parsed_len(),
@@ -784,19 +806,23 @@ pub trait FixedLengthParser<E, C>: Parser<E, C> {
             type Output<'a> = ();
             type Kind = Ignore;
 
-            fn parse<'a>(
+            fn parse<'a, H>(
                 &mut self,
                 input: Input<'a>,
-                errs: impl ErrorHandler<E>,
+                errs: H,
                 ctx: Context<C>,
-            ) -> ParseResult<Self::Output<'a>> {
+            ) -> ParseResult<Self::Output<'a>>
+            where
+                H: ErrorHandler,
+                H::Err: From<E>,
+            {
                 let new_input = Input {
                     src: input.src,
                     cur: input.cur - self.p.parsed_len(),
                 };
                 let result = self.p.parse(new_input, errs.clone(), ctx);
                 if result.is_some() {
-                    errs.error(ParseError::UnexpectedToken, input.cur..input.cur);
+                    errs.error(E::from(ParseError::UnexpectedToken), input.cur..input.cur);
                     None
                 } else {
                     Some((0, ()))
