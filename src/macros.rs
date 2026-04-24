@@ -123,7 +123,7 @@ macro_rules! parser_fn {
                 errs: impl $crate::error::ErrorHandler<E>,
                 ctx: &mut (),
             ) -> ParserResult<$crate::ret_type!($($ret)?)> {
-                let (__len, val) = Parser::<$crate::err_type!($($($err_ret)?)?), _>::parse(&mut $crate::p!($($parser),*), input, &|e, r| errs.error(e, r), ctx)?;
+                let (__len, val) = Parser::<$crate::err_type!($($($err_ret)?)?), _>::parse(&mut $crate::p!($($parser),*), input, move |e, r| errs.error(e, r), ctx)?;
                 Some((__len, val))
             }
         }
