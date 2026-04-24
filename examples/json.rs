@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use parsall::prelude::*;
+use parsall::{plookahead, prelude::*};
 use std::{
     collections::HashMap,
     num::{ParseFloatError, ParseIntError},
@@ -41,8 +41,40 @@ parser_fns! {
     MapEntry((Str, ":".pad(sep), Value)) -> (String, JSONValue), JSONError;
     Map(MapEntry.delim_by(",".pad(sep), collect()).opt_default().map(JSONValue::Map).pad(sep).wrapped("{", "}")) -> JSONValue, JSONError;
 
-    pub Value(List.or(Map).or(Bool).or(Float).or(Int).or(Null).or(Str.map(JSONValue::String))) -> JSONValue, JSONError;
+    Never("".not());
+    JStr(Str.map(JSONValue::String)) -> JSONValue;
+    IntOrFloat(Float.or(Int)) -> JSONValue, JSONError;
+    // Overflows when Map or List
+    // Overflows when _Lookahead (inlined and modified plookahead! invocation)
+    // Does not overflow when Map.or(List)
+    // Does overflow on Map.then("")
+    // Map.or(Never) works?
+    // Value(Value) breaks, this seems obvious to crash at runtime but why at comptime?
+    pub Value("".then(Value)) -> JSONValue, JSONError;
 }
+
+struct _Lookahead;
+
+impl<E> Parser<E, ()> for _Lookahead
+where
+    E: From<JSONError>,
+{
+    type Output<'a> = JSONValue;
+    type Kind = Keep;
+    fn parse<'a>(
+        &mut self,
+        input: parsall::Input<'a>,
+        errs: impl parsall::error::ErrorHandler<E>,
+        ctx: &mut (),
+    ) -> parsall::ParseResult<JSONValue> {
+        match input.src.chars().next() {
+            Some('{') => Parser::<E, ()>::parse(&mut Map, input, errs, ctx),
+            _ => None,
+        }
+    }
+}
+
+fn thing() {}
 
 #[derive(Debug)]
 enum JSONError {
@@ -70,5 +102,6 @@ impl From<ParseError> for JSONError {
 }
 
 fn main() {
-    Parser::<JSONError>::repl(Value)
+    Parser::<JSONError>::try_match(&mut Value, include_str!("/home/june/Downloads/big.json"))
+        .unwrap();
 }

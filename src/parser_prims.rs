@@ -1,7 +1,7 @@
 use std::ops::{RangeFull, RangeInclusive};
 
 use crate::{
-    Context, Input, ParseError, ParserResult,
+    Context, Input, ParseError, ParseResult,
     error::ErrorHandler,
     output::{Ignore, Keep},
     parser_fn,
@@ -20,7 +20,7 @@ where
         input: Input<'a>,
         _errs: impl ErrorHandler<E>,
         _ctx: Context<()>,
-    ) -> ParserResult<Self::Output<'a>> {
+    ) -> ParseResult<Self::Output<'a>> {
         let c = input.slice().chars().next();
         if let Some(c) = c {
             Some((c.len_utf8(), c))
@@ -42,7 +42,7 @@ where
         input: Input<'a>,
         errs: impl ErrorHandler<E>,
         _ctx: Context<()>,
-    ) -> ParserResult<Self::Output<'a>> {
+    ) -> ParseResult<Self::Output<'a>> {
         let c = input.slice().chars().next();
         if let Some(c) = c
             && self.contains(&c)
@@ -67,7 +67,7 @@ where
         input: Input<'a>,
         errs: impl ErrorHandler<E>,
         ctx: Context<C>,
-    ) -> ParserResult<Self::Output<'a>> {
+    ) -> ParseResult<Self::Output<'a>> {
         lit(self, self).parse(input, errs, ctx)
     }
 }
@@ -81,9 +81,10 @@ where
     }
 }
 
-impl<F> Parser<ParseError, ()> for F
+impl<F, E> Parser<E, ()> for F
 where
     F: Fn(char) -> bool,
+    E: From<ParseError>,
 {
     type Output<'a> = char;
     type Kind = Keep;
@@ -91,9 +92,9 @@ where
     fn parse<'a>(
         &mut self,
         input: Input<'a>,
-        _errs: impl ErrorHandler<ParseError>,
+        _errs: impl ErrorHandler<E>,
         _ctx: Context<()>,
-    ) -> ParserResult<Self::Output<'a>> {
+    ) -> ParseResult<Self::Output<'a>> {
         let c = input.slice().chars().next().filter(|c| self(*c))?;
         Some((c.len_utf8(), c))
     }
@@ -111,7 +112,7 @@ where
         input: Input<'a>,
         errs: impl ErrorHandler<E>,
         _ctx: Context<C>,
-    ) -> ParserResult<Self::Output<'a>> {
+    ) -> ParseResult<Self::Output<'a>> {
         if input.slice().starts_with(*self) {
             Some((self.len_utf8(), ()))
         } else {
@@ -142,7 +143,7 @@ where
         input: Input<'a>,
         errs: impl ErrorHandler<E>,
         _ctx: Context<()>,
-    ) -> ParserResult<Self::Output<'a>> {
+    ) -> ParseResult<Self::Output<'a>> {
         let c = input.slice().chars().next();
         if let Some(c) = c
             && self.contains(&c)
@@ -158,7 +159,7 @@ where
     }
 }
 
-fn lit<E, C>(
+const fn lit<E, C>(
     lit: &'static str,
     parser_name: &'static str,
 ) -> impl for<'a> FixedLengthParser<E, C, Output<'a> = (), Kind = Ignore>
@@ -181,7 +182,7 @@ where
             input: Input,
             errs: impl ErrorHandler<E>,
             _ctx: Context<C>,
-        ) -> ParserResult<()> {
+        ) -> ParseResult<()> {
             let num_matching = input
                 .slice()
                 .bytes()
@@ -236,7 +237,7 @@ where
             input: Input,
             errs: impl ErrorHandler<E>,
             _ctx: Context<C>,
-        ) -> ParserResult<Self::Output<'_>> {
+        ) -> ParseResult<Self::Output<'_>> {
             let next_char = input.slice().chars().next();
             if let Some(c) = next_char
                 && (self.f)(c)

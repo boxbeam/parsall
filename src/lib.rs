@@ -9,12 +9,12 @@ pub mod tuple;
 
 pub mod prelude {
     pub use crate::{
-        Context, MatchResult, ParserResult, error::*, macros::*, output::*, parser_prims::*,
+        Context, MatchResult, ParseResult, error::*, macros::*, output::*, parser_prims::*,
         parser_trait::*,
     };
 }
 
-pub type ParserResult<T> = Option<(usize, T)>;
+pub type ParseResult<T> = Option<(usize, T)>;
 pub type Context<'a, T> = &'a mut T;
 pub type MatchResult<T, E> = Result<T, Option<ErrorLocation<E>>>;
 
