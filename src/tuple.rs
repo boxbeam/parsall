@@ -15,7 +15,7 @@ where
         input: crate::Input<'b>,
         errs: impl crate::prelude::ErrorHandler<E>,
         ctx: crate::Context<C>,
-    ) -> crate::ParseResult<Self::Output<'b>> {
+    ) -> crate::ParserResult<Self::Output<'b>> {
         self.0.parse(input, errs, ctx)
     }
 }
@@ -51,7 +51,7 @@ macro_rules! impl_parser_tuple {
                 input: crate::Input<'a>,
                 errs: impl crate::prelude::ErrorHandler<Err>,
                 ctx: crate::Context<Ctx>,
-            ) -> crate::ParseResult<Self::Output<'a>> {
+            ) -> crate::ParserResult<Self::Output<'a>> {
                 let $name = self;
                 chain_parser!($($expr),+).parse(input, errs, ctx)
             }

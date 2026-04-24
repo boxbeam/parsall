@@ -26,7 +26,7 @@ macro_rules! not_drop {
         $parser.drop()
     };
     ($parser:expr, $name:ident) => {
-        $parser.keep()
+        $parser
     };
 }
 
@@ -99,7 +99,7 @@ macro_rules! parser_fn {
                 input: $crate::Input<'a>,
                 errs: impl $crate::error::ErrorHandler<E>,
                 ctx: &mut (),
-            ) -> $crate::ParseResult<$ret> {
+            ) -> ParserResult<$ret> {
                 let (__len, val) = Parser::<$crate::err_type!($($err_ret)?), _>::parse(&mut $crate::map_or_try_map!(
                     $($err_ret)? |
                     $crate::p!($($crate::not_drop!($parser $(, $match_name)?)),*) ;
@@ -122,9 +122,8 @@ macro_rules! parser_fn {
                 input: $crate::Input<'a>,
                 errs: impl $crate::error::ErrorHandler<E>,
                 ctx: &mut (),
-            ) -> $crate::ParseResult<$crate::ret_type!($($ret)?)> {
-                // Happening here, from the closure
-                let (__len, val) = $crate::parser_trait::Parser::<$crate::err_type!($($($err_ret)?)?), ()>::parse(&mut $crate::p!($($parser),*), input, |e, r| errs.error(e, r), ctx)?;
+            ) -> ParserResult<$crate::ret_type!($($ret)?)> {
+                let (__len, val) = Parser::<$crate::err_type!($($($err_ret)?)?), _>::parse(&mut $crate::p!($($parser),*), input, &|e, r| errs.error(e, r), ctx)?;
                 Some((__len, val))
             }
         }
@@ -140,33 +139,5 @@ macro_rules! parser_fns {
 macro_rules! pmatch {
     ( $( $($(@ $match_name:ident =)? $parser:expr),* => $val:expr ),+ $(,)?) => {
         $crate::parsers_choice!( $( $crate::p!( $($crate::not_drop!($parser $(, $match_name)?)),* ).map(|$crate::names_pattern!( $($($match_name,)?)? )| { $val } ) ),* )
-    };
-}
-
-#[macro_export]
-macro_rules! plookahead {
-    ( $(ERR = $err_name:literal;)? <$t:ty, $e:ty, $c:ty> $( $pat:pat => $parser:expr),+ $(,)? ) => {
-        {
-            struct _Lookahead;
-
-            impl<E> Parser<E, $c> for _Lookahead where E: From<$e> {
-                type Output<'a> = $t;
-                type Kind = Keep;
-
-                fn parse<'a>(&mut self, input: $crate::Input<'a>, errs: impl $crate::error::ErrorHandler<E>, ctx: &mut $c) -> $crate::ParseResult<$t> {
-                    match input.src.chars().next() {
-                        $(Some($pat) => Parser::<E>::parse(&mut $parser, input, errs, ctx)),+,
-                        _ => {
-                            $(
-                                errs.error($crate::error::ParseError::ExpectedToken($err_name), input.cur..input.cur);
-                            )?
-                            None
-                        }
-                    }
-                }
-            }
-
-            _Lookahead
-        }
     };
 }
